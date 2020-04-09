@@ -3,25 +3,18 @@ channels: !!python/tuple
 - !!python/unicode
   'defaults'
 dependencies:
-- joblib=0.9.4=py27_0
+- joblib=0.13.1=py37_0
 - menpo::ffmpeg=3.1.3=0
-- mkl=2017.0.1=0
-- numpy=1.12.1=py27_0
-- openssl=1.0.2k=1
-- pandas=0.19.2=np112py27_1
-- pip=9.0.1=py27_1
-- python=2.7.13=0
-- python-dateutil=2.6.0=py27_0
-- pytz=2017.2=py27_0
-- readline=6.2=2
-- setuptools=27.2.0=py27_0
-- six=1.10.0=py27_0
-- sqlite=3.13.0=0
-- tk=8.5.18=0
-- wheel=0.29.0=py27_0
-- zlib=1.2.8=3
+- numpy=1.17.2=py37haad9e8e_0
+- openssl=1.1.1f=h7b6447c_0
+- pandas=1.0.3=py37h0573a6f_0
+- pip=19.3.1=py37_0
+- python=3.7.7=hcf32534_0_cpython
+- pytz=2018.9=py37_0
+- setuptools=46.1.3=py37_0
+- six=1.14.0=py37_0
+- wheel=0.34.1=py37_0
 - pip:
   - decorator==4.0.11
   - olefile==0.44
-  - youtube-dl==2017.6.5
-
+  - youtube-dl==2020.3.24
