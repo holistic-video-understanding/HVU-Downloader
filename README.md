@@ -11,7 +11,7 @@ Next, setup the conda environment:
 ```
 conda env create -f environment.yml
 source activate HVU
-pip install --upgrade youtube-dl
+pip3 install --upgrade youtube-dl
 ```
 
 Finally, download a dataset split by calling:
