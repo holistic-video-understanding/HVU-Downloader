@@ -145,7 +145,7 @@ def main(input_csv, output_dir,
             row, output_dir) for i, row in dataset.iterrows())
 
     # Trim all clips
-    Parallel(n_jobs = 2)(delayed(trim_video)(row, output_dir, trim_format) for i,row in dataset.iterrows())
+    Parallel(n_jobs = num_jobs)(delayed(trim_video)(row, output_dir, trim_format) for i,row in dataset.iterrows())
 
     # Save download report.
     with open('download_report.json', 'w') as fobj:
