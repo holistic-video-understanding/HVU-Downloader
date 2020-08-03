@@ -18,3 +18,4 @@ dependencies:
   - decorator==4.0.11
   - olefile==0.44
   - youtube-dl==2020.3.24
+  - moviepy==1.0.3
