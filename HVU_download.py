@@ -10,6 +10,7 @@ from collections import OrderedDict
 from joblib import delayed
 from joblib import Parallel
 import pandas as pd
+from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip as trim
 
 
 def construct_video_filename(row,output_dir, trim_format='%06d'):
@@ -22,10 +23,22 @@ def construct_video_filename(row,output_dir, trim_format='%06d'):
     output_filename = os.path.join(output_dir,basename)
     return output_filename
 
+def trim_video(row, output_dir, trim_format = '%06d'):
+    """Trim all the videos present in the dataset if they were downloaded successfully"""
+    output_filename = construct_video_filename(row, output_dir, trim_format)
+    trimmed_filename = output_filename.split('.mp4')[0] + '_.mp4'
+    start_time = row['start-time']
+    end_time = row['end-time']
+
+    if os.path.exists(output_filename):
+        trim(output_filename,start_time,end_time,trimmed_filename)
+        os.remove(output_filename)
+    else:
+        print("Video not found!\n")
+    return
 
 def download_clip(video_identifier, output_filename,
                   start_time, end_time,
-                  tmp_dir='/tmp/HVU',
                   num_attempts=5,
                   url_base='https://www.youtube.com/watch?v='):
     """Download a video from youtube if exists and is not blocked.
@@ -49,13 +62,11 @@ def download_clip(video_identifier, output_filename,
 
     status = False
     # Construct command line for getting the direct video link.
-    tmp_filename = os.path.join(tmp_dir,
-                                '%s.%%(ext)s' % uuid.uuid4())
-    # print(tmp_filename)
     command = ['youtube-dl',
+               '--force-ipv4',
                '--quiet', '--no-warnings',
                '-f', 'mp4',
-               '-o', '"%s"' % tmp_filename,
+               '-o', '"%s"' % output_filename,
                '"%s"' % (url_base + video_identifier)]
     command = ' '.join(command)
     attempts = 0
@@ -69,33 +80,15 @@ def download_clip(video_identifier, output_filename,
                 return status, err.output
         else:
             break
-
-    tmp_filename = glob.glob('%s*' % tmp_filename.split('.')[0])[0]
-    # Construct command to trim the videos (ffmpeg required).
-    command = ['ffmpeg',
-               '-i', '"%s"' % tmp_filename,
-               '-ss', str(start_time),
-               '-t', str(end_time - start_time),
-               '-c:v', 'libx264', '-c:a', 'copy',
-               '-threads', '1',
-               '-loglevel', 'panic',
-               '"%s"' % output_filename]
-    command = ' '.join(command)
-    try:
-        output = subprocess.check_output(command, shell=True,
-                                         stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as err:
-        return status, err.output
-
     # Check if the video was successfully saved.
     status = os.path.exists(output_filename)
     os.remove(tmp_filename)
     return status, 'Downloaded'
 
 
-def download_clip_wrapper(row, output_dir, trim_format, tmp_dir):
+def download_clip_wrapper(row, output_dir):
     """Wrapper for parallel processing purposes."""
-    output_filename = construct_video_filename(row,output_dir,trim_format)
+    output_filename = construct_video_filename(row,output_dir)
 
     clip_id = os.path.basename(output_filename).split('.mp4')[0]
     if os.path.exists(output_filename):
@@ -103,8 +96,7 @@ def download_clip_wrapper(row, output_dir, trim_format, tmp_dir):
         return status
 
     downloaded, log = download_clip(row['video-id'], output_filename,
-                                    row['start-time'], row['end-time'],
-                                    tmp_dir=tmp_dir)
+                                    row['start-time'], row['end-time'])
     status = tuple([clip_id, downloaded, log])
     return status
 
@@ -125,7 +117,7 @@ def parse_CSV(input_csv):
             'video-id', 'start-time', 'end-time'
     """
     df = pd.read_csv(input_csv)
-    if 'youtube_id' in df.columns:    
+    if 'youtube_id' in df.columns:
         columns = OrderedDict([
             ('youtube_id', 'video-id'),
             ('time_start', 'start-time'),
@@ -135,30 +127,25 @@ def parse_CSV(input_csv):
 
 
 def main(input_csv, output_dir,
-         trim_format='%06d', num_jobs=24, tmp_dir='/tmp/HVU',
+         trim_format='%06d', num_jobs=-1,
          drop_duplicates=False):
-    
+
     #parse the dataset CSV file
     dataset = parse_CSV(input_csv)
-
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
 
     # Download all clips.
     if num_jobs == 1:
         status_lst = []
-        for i, row in dataset.iterrows():            
-            status_lst.append(download_clip_wrapper(row, output_dir,
-                                                    trim_format, tmp_dir))
+        for i, row in dataset.iterrows():
+            status_lst.append(download_clip_wrapper(row, output_dir))
     else:
-        status_lst = Parallel(n_jobs=num_jobs)(delayed(download_clip_wrapper)(
-            row, output_dir,
-            trim_format, tmp_dir) for i, row in dataset.iterrows())
+        status_lst = Parallel(n_jobs=num_jobs, require = 'sharedmem')(delayed(download_clip_wrapper)(
+            row, output_dir) for i, row in dataset.iterrows())
 
-    # Clean tmp dir.
-    shutil.rmtree(tmp_dir)
+    # Trim all clips
+    Parallel(n_jobs = num_jobs)(delayed(trim_video)(row, output_dir, trim_format) for i,row in dataset.iterrows())
 
     # Save download report.
     with open('download_report.json', 'w') as fobj:
@@ -178,7 +165,6 @@ if __name__ == '__main__':
                          'filename of trimmed videos: '
                          'videoid_%0xd(start_time)_%0xd(end_time).mp4'))
     p.add_argument('-n', '--num-jobs', type=int, default=12)
-    p.add_argument('-t', '--tmp-dir', type=str, default='/tmp/HVU')
     p.add_argument('--drop-duplicates', type=str, default='non-existent',
-                   help='Unavailable at the moment')                   
+                   help='Unavailable at the moment')
     main(**vars(p.parse_args()))
